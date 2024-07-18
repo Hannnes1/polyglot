@@ -1,0 +1,56 @@
+package view
+
+import "github.com/Hannnes1/polyglot/types"
+
+templ Index(languages types.Languages) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<title>Translations - Polyglot</title>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<link href="/assets/style.css" rel="stylesheet"/>
+			<script src="https://unpkg.com/htmx.org@2.0.1" crossorigin="anonymous"></script>
+		</head>
+		<body>
+			<form hx-post="/translations">
+				<button type="submit">Save</button>
+				<div class="flex">
+					@language(languages.En)
+					@language(languages.Sv)
+				</div>
+			</form>
+		</body>
+	</html>
+}
+
+templ language(language types.Language) {
+	<div id={ fullKey("lang", language.Key) } class="lang">
+		<h2>{ language.Name }</h2>
+		@keyGroup(language.Key, language.Data)
+	</div>
+}
+
+templ keyGroup(parentKey string, data map[string]interface{}) {
+	for key, value := range data {
+		if isMap(value) {
+			<fieldset>
+				<legend>{ key }:</legend>
+				@keyGroup(fullKey(parentKey, key), value.(map[string]interface{}))
+			</fieldset>
+		} else {
+			<label for={ fullKey(parentKey, key) }>{ key }:</label>
+			<input type="text" id={ fullKey(parentKey, key) } name={ fullKey(parentKey, key) } value={ value.(string) }/>
+			<br/>
+		}
+	}
+}
+
+func fullKey(parentKey string, key string) string {
+	return parentKey + "-" + key
+}
+
+func isMap(value interface{}) bool {
+	_, isMap := value.(map[string]interface{})
+	return isMap
+}

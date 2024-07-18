@@ -2,79 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"html/template"
-	"io"
-	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/Hannnes1/polyglot/types"
+	"github.com/Hannnes1/polyglot/view"
 )
 
-type Handler struct {
-	templates *template.Template
-}
-
-type Languages struct {
-	En interface{}
-	Sv interface{}
-}
-
-type Language struct {
-	Key  string
-	Name string
-	Data map[string]interface{}
-}
-
-func isMap(v interface{}) bool {
-	_, ok := v.(map[string]interface{})
-	return ok
-}
-
-// Helper for passing multiple parameters to template
-func dict(values ...interface{}) (map[string]interface{}, error) {
-	if len(values)%2 != 0 {
-		return nil, errors.New("invalid dict call")
-	}
-	dict := make(map[string]interface{}, len(values)/2)
-	for i := 0; i < len(values); i += 2 {
-		key, ok := values[i].(string)
-		if !ok {
-			return nil, errors.New("dict keys must be strings")
-		}
-		dict[key] = values[i+1]
-	}
-	return dict, nil
-}
-
-func newHandler() *Handler {
-	t := template.New("").Funcs(template.FuncMap{
-		"IsMap": isMap,
-		"Dict":  dict,
-	})
-
-	t = template.Must(t.ParseGlob("templates/components/*.html"))
-	t = template.Must(t.ParseGlob("templates/*.html"))
-
-	return &Handler{
-		templates: t,
-	}
-}
-
-func (h *Handler) render(w io.Writer, name string, data interface{}) error {
-	return h.templates.ExecuteTemplate(w, name, data)
-}
-
-func (h *Handler) handleTranslations(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		h.handleGetTranslations(w, r)
-		return
-	} else if r.Method == http.MethodPost {
-		h.handlePostTranslations(w, r)
-		return
-	}
-
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-}
-
-func (h *Handler) handleGetTranslations(w http.ResponseWriter, r *http.Request) {
+func handleGetTranslations(c echo.Context) error {
 	jsonDataEn := `{
         "confirm": "Confirm",
         "cancel": "Cancel",
@@ -104,35 +40,33 @@ func (h *Handler) handleGetTranslations(w http.ResponseWriter, r *http.Request) 
 
 	errEn := json.Unmarshal([]byte(jsonDataEn), &dataEn)
 	if errEn != nil {
-		http.Error(w, errEn.Error(), http.StatusInternalServerError)
-		return
+    return errEn
 	}
 	errSv := json.Unmarshal([]byte(jsonDataSv), &dataSv)
 	if errSv != nil {
-		http.Error(w, errSv.Error(), http.StatusInternalServerError)
-		return
+    return errSv
 	}
 
-	l := Languages{
-		En: Language{Key: "en", Name: "English", Data: dataEn},
-		Sv: Language{Key: "sv", Name: "Swedish", Data: dataSv},
+	l := types.Languages{
+		En: types.Language{Key: "en", Name: "English", Data: dataEn},
+		Sv: types.Language{Key: "sv", Name: "Swedish", Data: dataSv},
 	}
 
-	h.render(w, "translations.html", l)
-}
+  component := view.Index(l)
 
-// Save incoming data.
-// Data comes in as form data, where nested keys are separated by dashes.
-func (h *Handler) handlePostTranslations(w http.ResponseWriter, r *http.Request) {
-	// TODO: Save incoming data
+  component.Render(c.Request().Context(), c.Response().Writer)
+
+  return nil
 }
 
 func main() {
-	renderer := newHandler()
+  e := echo.New()
 
-	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets/"))))
+  e.Use(middleware.Logger())
 
-	http.HandleFunc("/", renderer.handleTranslations)
+  e.Static("/assets", "assets")
 
-	http.ListenAndServe(":8080", nil)
+  e.GET("/", handleGetTranslations)
+  
+  e.Logger.Fatal(e.Start(":8080"))
 }
