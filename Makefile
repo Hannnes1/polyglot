@@ -26,6 +26,6 @@ watch/sync_assets:
 	--build.include_dir "assets" \
 	--build.include_ext "js,css"
 
-# start all 5 watch processes in parallel.
+# start all watch processes in parallel.
 watch: 
-	make -j5 watch/tailwind watch/templ watch/server watch/esbuild watch/sync_assets
+	make -j5 watch/tailwind watch/templ watch/server watch/sync_assets

@@ -2,7 +2,7 @@ package view
 
 import "github.com/Hannnes1/polyglot/types"
 
-templ Index(languages types.Languages) {
+templ Index(translations []types.BaseTranslation) {
 	<!DOCTYPE html>
 	<html>
 		<head>
@@ -11,46 +11,66 @@ templ Index(languages types.Languages) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<link href="/assets/style.css" rel="stylesheet"/>
 			<script src="https://unpkg.com/htmx.org@2.0.1" crossorigin="anonymous"></script>
+			<script src="/assets/index.js"></script>
 		</head>
 		<body>
-			<form hx-post="/translations">
-				<button type="submit">Save</button>
-				<div class="flex">
-					@language(languages.En)
-					@language(languages.Sv)
+			<form hx-post="/" hx-ext="json-enc-custom" hx-target="#confirmation" hx-swap="outerHTML settle:2s">
+				<span class="flex gap-5 justify-end m-5 items-center">
+					@Confirmation()
+					<button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-5 rounded">Save</button>
+				</span>
+				<div class="m-5">
+					@buildTranslations(translations)
 				</div>
 			</form>
 		</body>
 	</html>
 }
 
-templ language(language types.Language) {
-	<div id={ fullKey("lang", language.Key) } class="lang">
-		<h2>{ language.Name }</h2>
-		@keyGroup(language.Key, language.Data)
-	</div>
-}
-
-templ keyGroup(parentKey string, data map[string]interface{}) {
-	for key, value := range data {
-		if isMap(value) {
-			<fieldset>
-				<legend>{ key }:</legend>
-				@keyGroup(fullKey(parentKey, key), value.(map[string]interface{}))
-			</fieldset>
-		} else {
-			<label for={ fullKey(parentKey, key) }>{ key }:</label>
-			<input type="text" id={ fullKey(parentKey, key) } name={ fullKey(parentKey, key) } value={ value.(string) }/>
-			<br/>
+templ buildTranslations(translations []types.BaseTranslation, parentKeys ...string) {
+	for _, t := range translations {
+		switch v := t.(type) {
+			case types.Translation:
+				@translation(v, parentKeys...)
+			case types.TranslationGroup:
+				@translationGroup(v, parentKeys...)
 		}
 	}
 }
 
-func fullKey(parentKey string, key string) string {
-	return parentKey + "-" + key
+templ translation(translation types.Translation, parentKeys ...string) {
+	<div class="flex gap-5 my-4">
+		<p class="flex-1">{ translation.Key() }:</p>
+		<textarea class="flex-[2] bg-gray-200 rounded p-1" name={ buildName("en", append(parentKeys, translation.Key())...) }>
+			{ translation.En }
+		</textarea>
+		<textarea class="flex-[2] bg-gray-200 rounded p-1" name={ buildName("sv", append(parentKeys, translation.Key())...) }>
+			{ translation.Sv }
+		</textarea>
+	</div>
 }
 
-func isMap(value interface{}) bool {
-	_, isMap := value.(map[string]interface{})
-	return isMap
+templ translationGroup(group types.TranslationGroup, parentKey ...string) {
+	<fieldset class="border p-5">
+		<legend class="font-bold">{ group.Key() }</legend>
+		@buildTranslations(group.Data, append(parentKey, group.Key())...)
+	</fieldset>
+}
+
+func buildName(lang string, keys ...string) string {
+	result := lang
+
+	for _, key := range keys {
+		if result == "" {
+			result = key
+		} else {
+			result += "[" + key + "]"
+		}
+	}
+
+	return result
+}
+
+templ Confirmation() {
+	<p id="confirmation" class="opacity-0 htmx-settling:opacity-100 transition-all duration-200">Saved!</p>
 }
