@@ -1,5 +1,10 @@
 package types
 
+type JsonTranslations struct {
+  En map[string]interface{}
+  Sv map[string]interface{}
+}
+
 type BaseTranslation interface {
 	Key() string
 }
@@ -40,3 +45,16 @@ func NewTranslationGroup(key string, data []BaseTranslation) TranslationGroup {
 		Data: data,
 	}
 }
+
+type FirebaseRemoteConfigResponse struct {
+  Parameters map[string]FirebaseRemoteConfigParameter `json:"parameters"`
+}
+
+type FirebaseRemoteConfigParameter struct {
+  DefaultValue FirebaseRemoteConfigValue `json:"defaultValue"`
+}
+
+type FirebaseRemoteConfigValue struct {
+  Value string `json:"value"`
+}
+

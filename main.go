@@ -6,52 +6,22 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+  "github.com/joho/godotenv"
 
-	"github.com/Hannnes1/polyglot/types"
-	"github.com/Hannnes1/polyglot/view"
+	"github.com/Hannnes1/polyglot/internal/repository"
+	"github.com/Hannnes1/polyglot/internal/types"
+	"github.com/Hannnes1/polyglot/internal/view"
 )
 
-func handleGetTranslations(c echo.Context) error {
-	jsonDataEn := `{
-        "confirm": "Confirm",
-        "cancel": "Cancel",
-        "example": {
-            "title": "Example",
-            "content": "This is an example content.",
-			"subExample": {
-				"title": "Subexample",
-				"aTitle": "Subexample",
-				"bTitle": "Subexample"
-			}
-        }
-    }`
+func handleGetTranslations(c echo.Context, repo repository.BaseRepository) error {
 
-	jsonDataSv := `{
-		"confirm": "Bekräfta",
-		"cancel": "Avbryt",
-		"example": {
-			"title": "Exempel",
-			"content": "Detta är ett exempel innehåll.",
-			"subExample": {
-				"title": "Underexempel",
-				"aTitle": "Underexempel"
-			}
-		}
-	}`
+	jsonData, err := repo.GetTranslations()
 
-	var dataEn map[string]interface{}
-	var dataSv map[string]interface{}
-
-	errEn := json.Unmarshal([]byte(jsonDataEn), &dataEn)
-	if errEn != nil {
-		return errEn
-	}
-	errSv := json.Unmarshal([]byte(jsonDataSv), &dataSv)
-	if errSv != nil {
-		return errSv
+	if err != nil {
+		return err
 	}
 
-	t := buildTranslations(dataEn, dataSv)
+	t := buildTranslations(jsonData.En, jsonData.Sv)
 
 	component := view.Index(t)
 
@@ -90,7 +60,7 @@ func buildTranslations(dataEn map[string]interface{}, dataSv map[string]interfac
 	return translations
 }
 
-func handlePostTranslations(c echo.Context) error {
+func handlePostTranslations(c echo.Context, repo repository.BaseRepository) error {
 	jsonMap := make(map[string]interface{})
 
 	err := json.NewDecoder(c.Request().Body).Decode(&jsonMap)
@@ -98,23 +68,15 @@ func handlePostTranslations(c echo.Context) error {
 		return err
 	}
 
-	svMap := jsonMap["sv"].(map[string]interface{})
-	enMap := jsonMap["en"].(map[string]interface{})
+	svJson := jsonMap["sv"].(map[string]interface{})
+	enJson := jsonMap["en"].(map[string]interface{})
 
-	svString, svErr := json.MarshalIndent(svMap, "", "    ")
-	if svErr != nil {
-		return svErr
-	}
+	repo.SaveTranslation(&types.JsonTranslations{
+		En: enJson,
+		Sv: svJson,
+	})
 
-	enString, enErr := json.MarshalIndent(enMap, "", "    ")
-	if enErr != nil {
-		return enErr
-	}
-
-	println(string(svString))
-	println(string(enString))
-
-  component := view.Confirmation()
+	component := view.Confirmation()
 
 	component.Render(c.Request().Context(), c.Response().Writer)
 
@@ -122,15 +84,29 @@ func handlePostTranslations(c echo.Context) error {
 }
 
 func main() {
+  err := godotenv.Load()
+  if err != nil {
+    panic(err)
+  }
+
+	repo, err := repository.NewFirebaseRepository()
+  if err != nil {
+    panic(err)
+  }
+
 	e := echo.New()
 
 	e.Use(middleware.Logger())
 
 	e.Static("/assets", "assets")
 
-	e.GET("/", handleGetTranslations)
+	e.GET("/", func(c echo.Context) error {
+		return handleGetTranslations(c, repo)
+	})
 
-	e.POST("/", handlePostTranslations)
+	e.POST("/", func(c echo.Context) error {
+		return handlePostTranslations(c, repo)
+	})
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

@@ -3,7 +3,7 @@ const plugin = require('tailwindcss/plugin')
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    'view/**/*.templ'
+    'internal/view/**/*.templ'
   ],
   theme: {
     extend: {},

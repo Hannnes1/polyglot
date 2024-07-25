@@ -27,6 +27,8 @@ go.work.sum
 package-lock.json
 node_modules
 
+gcp-credentials.json
+
 # Output files
 *_templ.go
 asests/style.css
