@@ -1,8 +1,8 @@
 package types
 
 type JsonTranslations struct {
-  En map[string]interface{}
-  Sv map[string]interface{}
+	En map[string]interface{}
+	Sv map[string]interface{}
 }
 
 type BaseTranslation interface {
@@ -46,15 +46,27 @@ func NewTranslationGroup(key string, data []BaseTranslation) TranslationGroup {
 	}
 }
 
-type FirebaseRemoteConfigResponse struct {
-  Parameters map[string]FirebaseRemoteConfigParameter `json:"parameters"`
+// A response to/reply from the Firebase Remote Config API.
+//
+// Parameters is the only important field in this application,
+// so the other fields' types are not defined.
+type FirebaseRemoteConfig struct {
+	Conditions      []interface{}                            `json:"conditions"`
+	Parameters      map[string]*FirebaseRemoteConfigParameter `json:"parameters"`
+	Version         interface{}                              `json:"version"`
+	ParameterGroups []interface{}                            `json:"parameterGroups"`
 }
 
 type FirebaseRemoteConfigParameter struct {
-  DefaultValue FirebaseRemoteConfigValue `json:"defaultValue"`
+	DefaultValue      *FirebaseRemoteConfigValue            `json:"defaultValue"`
+	ConditionalValues map[string]*FirebaseRemoteConfigValue `json:"conditionalValues"`
+	Description       string                               `json:"description"`
+	ValueType         string                               `json:"valueType"`
 }
 
 type FirebaseRemoteConfigValue struct {
-  Value string `json:"value"`
+	Value                *string      `json:"value"`
+	UseInAppDefault      *bool        `json:"useInAppDefault"`
+	PersonalizationValue *interface{} `json:"personalizationValue"`
+	RolloutValue         *interface{} `json:"rolloutValue"`
 }
-

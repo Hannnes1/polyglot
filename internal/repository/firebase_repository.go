@@ -22,7 +22,7 @@ type FirebaseRepository struct {
 func NewFirebaseRepository() (*FirebaseRepository, error) {
 	ctx := context.Background()
 
-  remoteConfigUrl = "https://firebaseremoteconfig.googleapis.com/v1/projects/" + os.Getenv("GCP_PROJECT") + "/remoteConfig"
+	remoteConfigUrl = "https://firebaseremoteconfig.googleapis.com/v1/projects/" + os.Getenv("GCP_PROJECT") + "/remoteConfig"
 
 	c, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/firebase.remoteconfig")
 	if err != nil {
@@ -34,23 +34,41 @@ func NewFirebaseRepository() (*FirebaseRepository, error) {
 	return &FirebaseRepository{}, nil
 }
 
-func (f FirebaseRepository) GetTranslations() (*types.JsonTranslations, error) {
-	res, err := client.Get(remoteConfigUrl)
+// Get the latest Firebase Remote Config, and associated ETag.
+func (f FirebaseRepository) getConfig() (*types.FirebaseRemoteConfig, string, error) {
+	req, err := http.NewRequest("GET", remoteConfigUrl, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+
+	req.Header.Set("x-goog-user-project", os.Getenv("GCP_PROJECT"))
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
 	}
 
 	defer res.Body.Close()
 
-  if res.StatusCode != 200 {
-    io.Copy(os.Stdout, res.Body)
+	if res.StatusCode != 200 {
+		println(res.StatusCode)
+		io.Copy(os.Stdout, res.Body)
 
-    return nil, errors.New("Failed to fetch translations")
-  }
+		return nil, "", errors.New("Failed to fetch translations")
+	}
 
-	body := types.FirebaseRemoteConfigResponse{}
+	body := types.FirebaseRemoteConfig{}
 
 	err = json.NewDecoder(res.Body).Decode(&body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &body, res.Header.Get("ETag"), nil
+}
+
+func (f FirebaseRepository) GetTranslations() (*types.JsonTranslations, error) {
+	config, _, err := f.getConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -58,12 +76,12 @@ func (f FirebaseRepository) GetTranslations() (*types.JsonTranslations, error) {
 	var enMap map[string]interface{}
 	var svMap map[string]interface{}
 
-	err = json.Unmarshal([]byte(body.Parameters["translations_en"].DefaultValue.Value), &enMap)
+	err = json.Unmarshal([]byte(*config.Parameters["translations_en"].DefaultValue.Value), &enMap)
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal([]byte(body.Parameters["translations_sv"].DefaultValue.Value), &svMap)
+	err = json.Unmarshal([]byte(*config.Parameters["translations_sv"].DefaultValue.Value), &svMap)
 	if err != nil {
 		return nil, err
 	}
@@ -90,32 +108,15 @@ func (f FirebaseRepository) SaveTranslation(translation *types.JsonTranslations)
 	enString := string(en)
 	svString := string(sv)
 
-	enValue := types.FirebaseRemoteConfigValue{
-		Value: enString,
+	config, eTag, err := f.getConfig()
+	if err != nil {
+		return err
 	}
 
-	svValue := types.FirebaseRemoteConfigValue{
-		Value: svString,
-	}
+	config.Parameters["translations_en"].DefaultValue.Value = &enString
+	config.Parameters["translations_sv"].DefaultValue.Value = &svString
 
-	enParameter := types.FirebaseRemoteConfigParameter{
-		DefaultValue: enValue,
-	}
-
-	svParameter := types.FirebaseRemoteConfigParameter{
-		DefaultValue: svValue,
-	}
-
-	parameters := map[string]types.FirebaseRemoteConfigParameter{
-		"translations_en": enParameter,
-		"translations_sv": svParameter,
-	}
-
-	body := types.FirebaseRemoteConfigResponse{
-		Parameters: parameters,
-	}
-
-	b, err := json.Marshal(body)
+	b, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,8 @@ func (f FirebaseRepository) SaveTranslation(translation *types.JsonTranslations)
 		return err
 	}
 
-  req.Header.Set("If-Match", "*")
+	req.Header.Set("If-Match", eTag)
+	req.Header.Set("x-goog-user-project", os.Getenv("GCP_PROJECT"))
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -133,6 +135,13 @@ func (f FirebaseRepository) SaveTranslation(translation *types.JsonTranslations)
 	}
 
 	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		println(res.StatusCode)
+		io.Copy(os.Stdout, res.Body)
+
+		return errors.New("Failed to save translations")
+	}
 
 	return nil
 }
